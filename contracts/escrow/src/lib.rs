@@ -142,7 +142,7 @@ impl EscrowContract {
             &token,
             &env.current_contract_address(),
             || {
-                token_client.transfer(&sponsor, &env.current_contract_address(), &amount);
+                token_client.transfer(&sponsor, env.current_contract_address(), &amount);
             },
         );
 
@@ -240,7 +240,7 @@ impl EscrowContract {
             &escrow.token,
             &env.current_contract_address(),
             || {
-                token_client.transfer(&sponsor, &env.current_contract_address(), &amount);
+                token_client.transfer(&sponsor, env.current_contract_address(), &amount);
             },
         );
 

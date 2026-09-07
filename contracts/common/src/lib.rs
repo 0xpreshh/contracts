@@ -64,23 +64,28 @@ pub const MAX_SPONSORS: u32 = 20;
 /// Prevents accidental or malicious fee spikes (e.g., 2.5% to 99%)
 pub const MAX_FEE_CHANGE_BPS: u32 = 500; // 5% maximum change per call
 
+/// Error from [`validate_fee_change`]. Deliberately small and generic — map
+/// it to whichever `InvalidFee`-shaped variant your contract's own `Error`
+/// enum already has, e.g. `validate_fee_change(..).map_err(|_| Error::InvalidFee)?`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FeeChangeError {
+    /// `new_fee` exceeds `BPS_DENOMINATOR` (10000 = 100%).
+    InvalidFee,
+}
+
 /// Validates a fee change is within acceptable bounds (Issue #20).
 /// Ensures new fee is valid (≤100%) and change is ≤5% to prevent spikes.
-pub fn validate_fee_change(old_fee: u32, new_fee: u32) -> Result<(), ()> {
+pub fn validate_fee_change(old_fee: u32, new_fee: u32) -> Result<(), FeeChangeError> {
     if new_fee as i128 > BPS_DENOMINATOR {
-        return Err(());
+        return Err(FeeChangeError::InvalidFee);
     }
-    
-    let delta = if new_fee > old_fee {
-        new_fee - old_fee
-    } else {
-        old_fee - new_fee
-    };
-    
+
+    let delta = new_fee.abs_diff(old_fee);
+
     if delta > MAX_FEE_CHANGE_BPS {
-        return Err(());
+        return Err(FeeChangeError::InvalidFee);
     }
-    
+
     Ok(())
 }
 
