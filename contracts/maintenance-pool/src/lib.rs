@@ -120,7 +120,8 @@ impl MaintenancePoolContract {
         pool.balance += amount;
         pool.total_deposited += amount;
         let index = pool.deposit_count;
-        pool.deposit_count = pool.deposit_count
+        pool.deposit_count = pool
+            .deposit_count
             .checked_add(1)
             .ok_or(Error::DepositCountOverflow)?;
 
