@@ -126,7 +126,7 @@ impl MilestonesContract {
             &token,
             &env.current_contract_address(),
             || {
-                token_client.transfer(&sponsor, &env.current_contract_address(), &total_budget);
+                token_client.transfer(&sponsor, env.current_contract_address(), &total_budget);
             },
         );
 
@@ -224,7 +224,7 @@ impl MilestonesContract {
             &milestone.token,
             &env.current_contract_address(),
             || {
-                token_client.transfer(&sponsor, &env.current_contract_address(), &amount);
+                token_client.transfer(&sponsor, env.current_contract_address(), &amount);
             },
         );
 
