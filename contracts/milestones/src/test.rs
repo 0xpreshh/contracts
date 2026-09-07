@@ -881,7 +881,6 @@ fn test_large_refund_distributes_dust_by_largest_remainder() {
     assert_eq!(client.get_milestone(&milestone_id).remaining_budget, 0);
 }
 
- feature/upgrade-pause-pagination-separation
 #[test]
 fn test_pause_blocks_commitment_paths_but_allows_cancel() {
     let env = Env::default();
@@ -934,6 +933,23 @@ fn test_pause_blocks_commitment_paths_but_allows_cancel() {
 
 #[test]
 fn test_unpause_restores_milestone_creation() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &1_000_000_000i128);
+
+    client.pause();
+    client.unpause();
+    assert!(!client.is_paused_view());
+
+    client.create_milestone(&92u64, &sponsor, &token_addr, &1_000_000_000i128, &1_000u64);
+    assert_eq!(client.get_milestone(&92u64).total_budget, 1_000_000_000i128);
+}
+
 #[contract]
 pub struct MockPanicToken;
 
@@ -947,16 +963,28 @@ impl MockPanicToken {
                 panic!("Frozen/unauthorized trustline recipient");
             }
         }
-        
+
         // Update balances
         let from_key = soroban_sdk::Symbol::new(&env, "bal");
         let to_key = soroban_sdk::Symbol::new(&env, "bal");
-        
-        let from_bal: i128 = env.storage().persistent().get(&(from_key.clone(), from.clone())).unwrap_or(0);
-        let to_bal: i128 = env.storage().persistent().get(&(to_key.clone(), to.clone())).unwrap_or(0);
-        
-        env.storage().persistent().set(&(from_key, from), &(from_bal - amount));
-        env.storage().persistent().set(&(to_key, to), &(to_bal + amount));
+
+        let from_bal: i128 = env
+            .storage()
+            .persistent()
+            .get(&(from_key.clone(), from.clone()))
+            .unwrap_or(0);
+        let to_bal: i128 = env
+            .storage()
+            .persistent()
+            .get(&(to_key.clone(), to.clone()))
+            .unwrap_or(0);
+
+        env.storage()
+            .persistent()
+            .set(&(from_key, from), &(from_bal - amount));
+        env.storage()
+            .persistent()
+            .set(&(to_key, to), &(to_bal + amount));
     }
 
     pub fn set_blocked(env: Env, blocked: Address) {
@@ -968,11 +996,17 @@ impl MockPanicToken {
         let bal_key = soroban_sdk::Symbol::new(&env, "bal");
         env.storage().persistent().get(&(bal_key, id)).unwrap_or(0)
     }
-    
+
     pub fn mint(env: Env, to: Address, amount: i128) {
         let bal_key = soroban_sdk::Symbol::new(&env, "bal");
-        let balance: i128 = env.storage().persistent().get(&(bal_key.clone(), to.clone())).unwrap_or(0);
-        env.storage().persistent().set(&(bal_key, to), &(balance + amount));
+        let balance: i128 = env
+            .storage()
+            .persistent()
+            .get(&(bal_key.clone(), to.clone()))
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&(bal_key, to), &(balance + amount));
     }
 }
 
@@ -1007,7 +1041,10 @@ fn test_release_issue_all_or_nothing_revert_with_blocked_recipient() {
 
     // The release_issue call must revert (fail) due to the blocked recipient
     let result = client.try_release_issue(&70u64, &701u64, &recipients);
-    assert!(result.is_err(), "Expected release_issue to revert when one recipient is blocked");
+    assert!(
+        result.is_err(),
+        "Expected release_issue to revert when one recipient is blocked"
+    );
 
     // The issue status must remain Allocated (all-or-nothing revert)
     let status = client.get_issue_status(&70u64, &701u64);
@@ -1034,10 +1071,7 @@ impl SimpleRng {
     }
 }
 
-fn assert_milestone_invariants(
-    client: &MilestonesContractClient,
-    milestone_id: u64,
-) {
+fn assert_milestone_invariants(client: &MilestonesContractClient, milestone_id: u64) {
     let milestone = match client.try_get_milestone(&milestone_id) {
         Ok(Ok(m)) => m,
         _ => return,
@@ -1057,8 +1091,7 @@ fn assert_milestone_invariants(
         // remaining_budget is zero (any still-allocated amounts were intentionally
         // left in the allocations map for potential later release_issue calls).
         assert_eq!(
-            milestone.remaining_budget,
-            0i128,
+            milestone.remaining_budget, 0i128,
             "Closed milestone {} must have remaining_budget == 0",
             milestone_id
         );
@@ -1122,16 +1155,15 @@ fn test_milestones_invariant_fuzzing() {
                 let m_id = rng.next_range(100, 104) as u64;
                 let budget = rng.next_range(1000, 100000) as i128;
                 let deadline = env.ledger().timestamp() + rng.next_range(60, 3600) as u64;
-                let res = client.try_create_milestone(&m_id, &sponsor, &token_addr, &budget, &deadline);
-                if res.is_ok() {
-                    if !tracked_milestones.contains(m_id) {
-                        tracked_milestones.push_back(m_id);
-                    }
+                let res =
+                    client.try_create_milestone(&m_id, &sponsor, &token_addr, &budget, &deadline);
+                if res.is_ok() && !tracked_milestones.contains(m_id) {
+                    tracked_milestones.push_back(m_id);
                 }
             }
             1 => {
                 // Contribute
-                if tracked_milestones.len() > 0 {
+                if !tracked_milestones.is_empty() {
                     let idx = rng.next_range(0, tracked_milestones.len() - 1);
                     let m_id = tracked_milestones.get(idx).unwrap();
                     let amount = rng.next_range(100, 50000) as i128;
@@ -1140,7 +1172,7 @@ fn test_milestones_invariant_fuzzing() {
             }
             2 => {
                 // Allocate
-                if tracked_milestones.len() > 0 {
+                if !tracked_milestones.is_empty() {
                     let idx = rng.next_range(0, tracked_milestones.len() - 1);
                     let m_id = tracked_milestones.get(idx).unwrap();
                     let issue_idx = rng.next_range(0, tracked_issues.len() - 1);
@@ -1151,21 +1183,18 @@ fn test_milestones_invariant_fuzzing() {
             }
             3 => {
                 // Release issue
-                if tracked_milestones.len() > 0 {
+                if !tracked_milestones.is_empty() {
                     let idx = rng.next_range(0, tracked_milestones.len() - 1);
                     let m_id = tracked_milestones.get(idx).unwrap();
                     let issue_idx = rng.next_range(0, tracked_issues.len() - 1);
                     let issue_id = tracked_issues.get(issue_idx).unwrap();
-                    let recipients = soroban_sdk::vec![
-                        &env,
-                        (maintainer.clone(), 10_000u32),
-                    ];
+                    let recipients = soroban_sdk::vec![&env, (maintainer.clone(), 10_000u32),];
                     let _ = client.try_release_issue(&m_id, &issue_id, &recipients);
                 }
             }
             4 => {
                 // Deallocate
-                if tracked_milestones.len() > 0 {
+                if !tracked_milestones.is_empty() {
                     let idx = rng.next_range(0, tracked_milestones.len() - 1);
                     let m_id = tracked_milestones.get(idx).unwrap();
                     let issue_idx = rng.next_range(0, tracked_issues.len() - 1);
@@ -1175,7 +1204,7 @@ fn test_milestones_invariant_fuzzing() {
             }
             5 => {
                 // Cancel milestone
-                if tracked_milestones.len() > 0 {
+                if !tracked_milestones.is_empty() {
                     let idx = rng.next_range(0, tracked_milestones.len() - 1);
                     let m_id = tracked_milestones.get(idx).unwrap();
                     let _ = client.try_cancel_milestone(&m_id);
@@ -1230,7 +1259,10 @@ fn test_state_machine_allocate_creates_allocated_status() {
     assert!(!client.get_milestone(&900u64).closed);
 
     client.allocate(&900u64, &9001u64, &5_000i128);
-    assert_eq!(client.get_issue_status(&900u64, &9001u64), IssueStatus::Allocated);
+    assert_eq!(
+        client.get_issue_status(&900u64, &9001u64),
+        IssueStatus::Allocated
+    );
 }
 
 #[test]
@@ -1246,11 +1278,17 @@ fn test_state_machine_allocated_to_released_via_release_issue() {
 
     client.create_milestone(&901u64, &sponsor, &token_addr, &10_000i128, &1_000u64);
     client.allocate(&901u64, &9011u64, &5_000i128);
-    assert_eq!(client.get_issue_status(&901u64, &9011u64), IssueStatus::Allocated);
+    assert_eq!(
+        client.get_issue_status(&901u64, &9011u64),
+        IssueStatus::Allocated
+    );
 
     let maintainer = Address::generate(&env);
     client.release_issue(&901u64, &9011u64, &vec![&env, (maintainer, 10_000u32)]);
-    assert_eq!(client.get_issue_status(&901u64, &9011u64), IssueStatus::Released);
+    assert_eq!(
+        client.get_issue_status(&901u64, &9011u64),
+        IssueStatus::Released
+    );
 }
 
 #[test]
@@ -1268,8 +1306,15 @@ fn test_state_machine_released_blocks_double_release() {
     client.allocate(&902u64, &9021u64, &5_000i128);
 
     let maintainer = Address::generate(&env);
-    client.release_issue(&902u64, &9021u64, &vec![&env, (maintainer.clone(), 10_000u32)]);
-    assert_eq!(client.get_issue_status(&902u64, &9021u64), IssueStatus::Released);
+    client.release_issue(
+        &902u64,
+        &9021u64,
+        &vec![&env, (maintainer.clone(), 10_000u32)],
+    );
+    assert_eq!(
+        client.get_issue_status(&902u64, &9021u64),
+        IssueStatus::Released
+    );
 
     // Released -> release must be rejected
     let err = client.try_release_issue(&902u64, &9021u64, &vec![&env, (maintainer, 10_000u32)]);
@@ -1294,14 +1339,26 @@ fn test_state_machine_cancel_milestone_preserves_issue_statuses() {
     // Release one issue, leave the other allocated
     let maintainer = Address::generate(&env);
     client.release_issue(&903u64, &9031u64, &vec![&env, (maintainer, 10_000u32)]);
-    assert_eq!(client.get_issue_status(&903u64, &9031u64), IssueStatus::Released);
-    assert_eq!(client.get_issue_status(&903u64, &9032u64), IssueStatus::Allocated);
+    assert_eq!(
+        client.get_issue_status(&903u64, &9031u64),
+        IssueStatus::Released
+    );
+    assert_eq!(
+        client.get_issue_status(&903u64, &9032u64),
+        IssueStatus::Allocated
+    );
 
     // Cancel milestone — closed becomes true, but issue statuses are preserved
     client.cancel_milestone(&903u64);
     assert!(client.get_milestone(&903u64).closed);
-    assert_eq!(client.get_issue_status(&903u64, &9031u64), IssueStatus::Released);
-    assert_eq!(client.get_issue_status(&903u64, &9032u64), IssueStatus::Allocated);
+    assert_eq!(
+        client.get_issue_status(&903u64, &9031u64),
+        IssueStatus::Released
+    );
+    assert_eq!(
+        client.get_issue_status(&903u64, &9032u64),
+        IssueStatus::Allocated
+    );
 }
 
 #[test]
@@ -1356,7 +1413,10 @@ fn test_state_machine_deallocate_moves_allocated_to_unallocated() {
 
     client.create_milestone(&906u64, &sponsor, &token_addr, &10_000i128, &1_000u64);
     client.allocate(&906u64, &9061u64, &5_000i128);
-    assert_eq!(client.get_issue_status(&906u64, &9061u64), IssueStatus::Allocated);
+    assert_eq!(
+        client.get_issue_status(&906u64, &9061u64),
+        IssueStatus::Allocated
+    );
 
     client.deallocate(&906u64, &9061u64);
     // After deallocate, IssueStatus is removed — query returns NotFound
@@ -1380,7 +1440,10 @@ fn test_state_machine_deallocate_rejects_released_issue() {
 
     let maintainer = Address::generate(&env);
     client.release_issue(&907u64, &9071u64, &vec![&env, (maintainer, 10_000u32)]);
-    assert_eq!(client.get_issue_status(&907u64, &9071u64), IssueStatus::Released);
+    assert_eq!(
+        client.get_issue_status(&907u64, &9071u64),
+        IssueStatus::Released
+    );
 
     // Released -> deallocate must be rejected
     let err = client.try_deallocate(&907u64, &9071u64);
@@ -1389,7 +1452,6 @@ fn test_state_machine_deallocate_rejects_released_issue() {
 
 #[test]
 fn test_state_machine_allocate_rejects_duplicate_allocation() {
- main
     let env = Env::default();
     env.mock_all_auths();
     let (_admin, _treasury, client) = setup(&env);
@@ -1397,16 +1459,6 @@ fn test_state_machine_allocate_rejects_duplicate_allocation() {
     let token_admin = Address::generate(&env);
     let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
     let sponsor = Address::generate(&env);
- feature/upgrade-pause-pagination-separation
-    asset_client.mint(&sponsor, &1_000_000_000i128);
-
-    client.pause();
-    client.unpause();
-    assert!(!client.is_paused_view());
-
-    client.create_milestone(&92u64, &sponsor, &token_addr, &1_000_000_000i128, &1_000u64);
-    assert_eq!(client.get_milestone(&92u64).total_budget, 1_000_000_000i128);
-
     asset_client.mint(&sponsor, &10_000i128);
 
     client.create_milestone(&908u64, &sponsor, &token_addr, &10_000i128, &1_000u64);
@@ -1415,5 +1467,4 @@ fn test_state_machine_allocate_rejects_duplicate_allocation() {
     // Allocated -> allocate same issue must be rejected
     let err = client.try_allocate(&908u64, &9081u64, &5_000i128);
     assert_eq!(err, Err(Ok(Error::IssueAlreadyAllocated)));
- main
 }
