@@ -711,3 +711,68 @@ fn test_deposit_rejects_when_deposit_count_would_overflow() {
     let err = client.try_deposit(&10u64, &sponsor, &token_addr, &100i128);
     assert_eq!(err, Err(Ok(Error::DepositCountOverflow)));
 }
+
+// ─── upgrade (issue #246) ────────────────────────────────────────────────────
+
+/// Hash of the empty Wasm the test host installs as the executable for every
+/// natively-registered contract. Upgrading to it keeps the native
+/// implementation dispatchable, so post-upgrade behaviour can be asserted
+/// without shipping a compiled .wasm fixture.
+fn native_wasm_hash(env: &Env) -> BytesN<32> {
+    env.crypto().sha256(&soroban_sdk::Bytes::new(env)).into()
+}
+
+#[test]
+fn test_upgrade_requires_admin_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+    let hash = native_wasm_hash(&env);
+
+    // No auths at all: the admin's require_auth must fail.
+    env.set_auths(&[]);
+    assert!(client.try_upgrade(&hash).is_err());
+
+    // A non-admin signing the call is rejected too.
+    let attacker = Address::generate(&env);
+    let result = client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &attacker,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "upgrade",
+                args: soroban_sdk::IntoVal::into_val(&(hash.clone(),), &env),
+                sub_invokes: &[],
+            },
+        }])
+        .try_upgrade(&hash);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_upgrade_bumps_version() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    // Simulate a deployment from before the current CONTRACT_VERSION.
+    env.as_contract(&client.address, || {
+        env.storage().instance().set(&DataKey::Version, &0u32);
+    });
+    assert_eq!(client.get_version(), 0);
+
+    client.upgrade(&native_wasm_hash(&env));
+    assert_eq!(client.get_version(), CONTRACT_VERSION);
+}
+
+#[test]
+fn test_upgrade_rejects_unknown_wasm_hash() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    // A hash that was never uploaded must make the host reject the upgrade.
+    let bogus = BytesN::from_array(&env, &[7u8; 32]);
+    assert!(client.try_upgrade(&bogus).is_err());
+    assert_eq!(client.get_version(), CONTRACT_VERSION);
+}
