@@ -642,6 +642,26 @@ fn test_reclaim_deposit_succeeds_exactly_at_inactivity_window_boundary() {
     assert_eq!(token_client.balance(&sponsor), 5_000_000_000i128);
 }
 
+/// Complements the exact-boundary success test above: one second before the
+/// boundary, the window has not yet elapsed and the call must still reject.
+#[test]
+fn test_reclaim_deposit_rejects_one_second_before_inactivity_window_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &5_000_000_000i128);
+
+    client.deposit(&92u64, &sponsor, &token_addr, &5_000_000_000i128);
+
+    env.ledger().set_timestamp(INACTIVITY_WINDOW - 1);
+    let err = client.try_reclaim_deposit(&92u64, &0u32, &sponsor);
+    assert_eq!(err, Err(Ok(Error::InactivityWindowNotElapsed)));
+}
+
 #[test]
 fn test_unpause_restores_deposit() {
     let env = Env::default();
