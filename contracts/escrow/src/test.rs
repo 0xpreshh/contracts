@@ -2008,3 +2008,84 @@ fn test_set_fee_bps_accepts_change_within_step_limit() {
     client.set_fee_bps(&0u32);
     assert_eq!(client.get_fee_bps(), 0u32);
 }
+
+#[test]
+fn test_set_fee_bps_rejects_change_exceeding_step_limit() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_, _admin, _treasury, client) = setup(&env); // starts at 500 bps
+
+    // +501 bps
+    assert_eq!(
+        client.try_set_fee_bps(&1_001u32),
+        Err(Ok(Error::InvalidFee))
+    );
+
+    // -501 bps (after moving up to 1000 first)
+    client.set_fee_bps(&1_000u32);
+    assert_eq!(client.try_set_fee_bps(&499u32), Err(Ok(Error::InvalidFee)));
+
+    // A large spike (the #20 scenario) is rejected outright.
+    assert_eq!(
+        client.try_set_fee_bps(&9_900u32),
+        Err(Ok(Error::InvalidFee))
+    );
+
+    assert_eq!(client.get_fee_bps(), 1_000u32);
+}
+
+#[test]
+fn test_set_fee_bps_rejects_value_above_bps_denominator() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_, _admin, _treasury, client) = setup(&env); // starts at 500 bps
+
+    // Climb to exactly 10000 (100%) in valid +500 steps.
+    let mut fee = 500u32;
+    while fee < 10_000 {
+        fee += 500;
+        client.set_fee_bps(&fee);
+    }
+    assert_eq!(client.get_fee_bps(), 10_000u32);
+
+    // One more step, even a tiny one, would exceed BPS_DENOMINATOR.
+    assert_eq!(
+        client.try_set_fee_bps(&10_001u32),
+        Err(Ok(Error::InvalidFee))
+    );
+    assert_eq!(
+        client.try_set_fee_bps(&10_500u32),
+        Err(Ok(Error::InvalidFee))
+    );
+    assert_eq!(client.get_fee_bps(), 10_000u32);
+}
+
+/// Fee is read at release time, not snapshotted at fund time (#53): an escrow
+/// funded before a fee change pays out using the updated fee.
+#[test]
+fn test_set_fee_bps_applies_to_already_funded_escrow_at_release() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_, _admin, treasury, client) = setup(&env); // starts at 500 bps
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &10_000i128);
+    client.fund(
+        &242u64,
+        &sponsor,
+        &token_addr,
+        &10_000i128,
+        &1_000u64,
+        &None,
+    );
+
+    client.set_fee_bps(&1_000u32); // 5% -> 10%
+
+    let contributor = Address::generate(&env);
+    client.release(&242u64, &vec![&env, (contributor.clone(), 10_000u32)]);
+
+    assert_eq!(token_client.balance(&treasury), 1_000i128);
+    assert_eq!(token_client.balance(&contributor), 9_000i128);
+}
