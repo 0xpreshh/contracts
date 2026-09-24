@@ -776,3 +776,57 @@ fn test_upgrade_rejects_unknown_wasm_hash() {
     assert!(client.try_upgrade(&bogus).is_err());
     assert_eq!(client.get_version(), CONTRACT_VERSION);
 }
+
+/// Maintenance pools are long-lived, so an upgrade must not disturb a pool's
+/// accumulated state: every Deposit sub-record stays readable and the pool
+/// keeps accepting deposits and withdrawals afterwards.
+#[test]
+fn test_upgrade_preserves_pool_with_multiple_deposits() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, treasury, client) = setup(&env); // 10% fee
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, token_client) = create_token(&env, &token_admin);
+    let sponsors = [
+        Address::generate(&env),
+        Address::generate(&env),
+        Address::generate(&env),
+    ];
+    let amounts = [1_000i128, 2_000i128, 3_000i128];
+    for (sponsor, amount) in sponsors.iter().zip(amounts) {
+        asset_client.mint(sponsor, &amount);
+        client.deposit(&246u64, sponsor, &token_addr, &amount);
+    }
+
+    let pool_before = client.get_pool(&246u64);
+    assert_eq!(pool_before.deposit_count, 3);
+    assert_eq!(pool_before.balance, 6_000i128);
+
+    client.upgrade(&native_wasm_hash(&env));
+
+    // Pool and every Deposit record are unchanged.
+    assert_eq!(client.get_pool(&246u64), pool_before);
+    for (i, (sponsor, amount)) in sponsors.iter().zip(amounts).enumerate() {
+        let d = client.get_deposit(&246u64, &(i as u32));
+        assert_eq!(&d.sponsor, sponsor);
+        assert_eq!(d.amount, amount);
+    }
+
+    // And the pool is still fully functional.
+    let late_sponsor = Address::generate(&env);
+    asset_client.mint(&late_sponsor, &500i128);
+    client.deposit(&246u64, &late_sponsor, &token_addr, &500i128);
+    assert_eq!(client.get_pool(&246u64).deposit_count, 4);
+    assert_eq!(client.get_deposit(&246u64, &3u32).sponsor, late_sponsor);
+
+    let maintainer = Address::generate(&env);
+    client.withdraw(&246u64, &maintainer, &1_000i128);
+    let pool_after = client.get_pool(&246u64);
+    assert_eq!(pool_after.balance, 5_500i128);
+    assert_eq!(pool_after.total_withdrawn, 1_000i128);
+    assert_eq!(
+        token_client.balance(&maintainer) + token_client.balance(&treasury),
+        1_000i128
+    );
+}
