@@ -711,3 +711,122 @@ fn test_deposit_rejects_when_deposit_count_would_overflow() {
     let err = client.try_deposit(&10u64, &sponsor, &token_addr, &100i128);
     assert_eq!(err, Err(Ok(Error::DepositCountOverflow)));
 }
+
+// ─── upgrade (issue #246) ────────────────────────────────────────────────────
+
+/// Hash of the empty Wasm the test host installs as the executable for every
+/// natively-registered contract. Upgrading to it keeps the native
+/// implementation dispatchable, so post-upgrade behaviour can be asserted
+/// without shipping a compiled .wasm fixture.
+fn native_wasm_hash(env: &Env) -> BytesN<32> {
+    env.crypto().sha256(&soroban_sdk::Bytes::new(env)).into()
+}
+
+#[test]
+fn test_upgrade_requires_admin_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+    let hash = native_wasm_hash(&env);
+
+    // No auths at all: the admin's require_auth must fail.
+    env.set_auths(&[]);
+    assert!(client.try_upgrade(&hash).is_err());
+
+    // A non-admin signing the call is rejected too.
+    let attacker = Address::generate(&env);
+    let result = client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &attacker,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "upgrade",
+                args: soroban_sdk::IntoVal::into_val(&(hash.clone(),), &env),
+                sub_invokes: &[],
+            },
+        }])
+        .try_upgrade(&hash);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_upgrade_bumps_version() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    // Simulate a deployment from before the current CONTRACT_VERSION.
+    env.as_contract(&client.address, || {
+        env.storage().instance().set(&DataKey::Version, &0u32);
+    });
+    assert_eq!(client.get_version(), 0);
+
+    client.upgrade(&native_wasm_hash(&env));
+    assert_eq!(client.get_version(), CONTRACT_VERSION);
+}
+
+#[test]
+fn test_upgrade_rejects_unknown_wasm_hash() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    // A hash that was never uploaded must make the host reject the upgrade.
+    let bogus = BytesN::from_array(&env, &[7u8; 32]);
+    assert!(client.try_upgrade(&bogus).is_err());
+    assert_eq!(client.get_version(), CONTRACT_VERSION);
+}
+
+/// Maintenance pools are long-lived, so an upgrade must not disturb a pool's
+/// accumulated state: every Deposit sub-record stays readable and the pool
+/// keeps accepting deposits and withdrawals afterwards.
+#[test]
+fn test_upgrade_preserves_pool_with_multiple_deposits() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, treasury, client) = setup(&env); // 10% fee
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, token_client) = create_token(&env, &token_admin);
+    let sponsors = [
+        Address::generate(&env),
+        Address::generate(&env),
+        Address::generate(&env),
+    ];
+    let amounts = [1_000i128, 2_000i128, 3_000i128];
+    for (sponsor, amount) in sponsors.iter().zip(amounts) {
+        asset_client.mint(sponsor, &amount);
+        client.deposit(&246u64, sponsor, &token_addr, &amount);
+    }
+
+    let pool_before = client.get_pool(&246u64);
+    assert_eq!(pool_before.deposit_count, 3);
+    assert_eq!(pool_before.balance, 6_000i128);
+
+    client.upgrade(&native_wasm_hash(&env));
+
+    // Pool and every Deposit record are unchanged.
+    assert_eq!(client.get_pool(&246u64), pool_before);
+    for (i, (sponsor, amount)) in sponsors.iter().zip(amounts).enumerate() {
+        let d = client.get_deposit(&246u64, &(i as u32));
+        assert_eq!(&d.sponsor, sponsor);
+        assert_eq!(d.amount, amount);
+    }
+
+    // And the pool is still fully functional.
+    let late_sponsor = Address::generate(&env);
+    asset_client.mint(&late_sponsor, &500i128);
+    client.deposit(&246u64, &late_sponsor, &token_addr, &500i128);
+    assert_eq!(client.get_pool(&246u64).deposit_count, 4);
+    assert_eq!(client.get_deposit(&246u64, &3u32).sponsor, late_sponsor);
+
+    let maintainer = Address::generate(&env);
+    client.withdraw(&246u64, &maintainer, &1_000i128);
+    let pool_after = client.get_pool(&246u64);
+    assert_eq!(pool_after.balance, 5_500i128);
+    assert_eq!(pool_after.total_withdrawn, 1_000i128);
+    assert_eq!(
+        token_client.balance(&maintainer) + token_client.balance(&treasury),
+        1_000i128
+    );
+}
