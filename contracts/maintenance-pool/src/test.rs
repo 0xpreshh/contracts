@@ -614,6 +614,34 @@ fn test_pause_blocks_deposit_and_withdraw_but_allows_reclaim_after_inactivity() 
     assert_eq!(token_client.balance(&sponsor), 10_000_000_000i128);
 }
 
+/// #346: `reclaim_deposit` compares with strict `<`
+/// (`now < pool.last_withdraw_at + INACTIVITY_WINDOW`), so the window is
+/// intended to be *inclusive* of its own boundary — a reclaim attempted at
+/// exactly `last_withdraw_at + INACTIVITY_WINDOW` must succeed, not just one
+/// second past it. This pins down that exact edge, which no prior test
+/// exercised (the only success-path test used `INACTIVITY_WINDOW + 1`).
+#[test]
+fn test_reclaim_deposit_succeeds_exactly_at_inactivity_window_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &5_000_000_000i128);
+
+    // Pool created at timestamp 0, so last_withdraw_at is initialized to 0
+    // (no withdrawal has ever occurred).
+    client.deposit(&91u64, &sponsor, &token_addr, &5_000_000_000i128);
+    assert_eq!(client.get_pool(&91u64).last_withdraw_at, 0);
+
+    // Exactly at the boundary: now == last_withdraw_at + INACTIVITY_WINDOW.
+    env.ledger().set_timestamp(INACTIVITY_WINDOW);
+    client.reclaim_deposit(&91u64, &0u32, &sponsor);
+    assert_eq!(token_client.balance(&sponsor), 5_000_000_000i128);
+}
+
 #[test]
 fn test_unpause_restores_deposit() {
     let env = Env::default();
