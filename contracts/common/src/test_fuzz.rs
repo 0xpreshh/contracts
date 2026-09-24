@@ -245,4 +245,44 @@ mod tests {
         let sum: i128 = result.iter().sum();
         assert!((sum - total).abs() <= 3, "Rounding error too large");
     }
+
+    /// Issue #342: `compute_split` must reject an empty recipients list via
+    /// its dedicated `is_empty()` guard, before the bps-sum check runs.
+    #[test]
+    fn test_empty_recipients_rejected() {
+        use crate::{compute_split, SplitError};
+        use soroban_sdk::{Address, Env, Vec as SorobanVec};
+
+        let env = Env::default();
+        let recipients: SorobanVec<(Address, u32)> = SorobanVec::new(&env);
+
+        for fee_bps in [0u32, 250, 10_000] {
+            let result = compute_split(&env, 1_000_000, fee_bps, &recipients);
+            assert!(matches!(result, Err(SplitError::InvalidSplit)));
+        }
+
+        // Also rejected for a zero total — emptiness alone is invalid.
+        assert!(matches!(
+            compute_split(&env, 0, 0, &recipients),
+            Err(SplitError::InvalidSplit)
+        ));
+    }
+
+    /// Sanity counterpart: the real `compute_split` accepts a single
+    /// recipient at 100%, so the empty-list rejection above is specific to
+    /// emptiness and not a blanket failure of the harness.
+    #[test]
+    fn test_single_recipient_accepted_by_real_compute_split() {
+        use crate::compute_split;
+        use soroban_sdk::{testutils::Address as _, Address, Env, Vec as SorobanVec};
+
+        let env = Env::default();
+        let recipient = Address::generate(&env);
+        let recipients = SorobanVec::from_array(&env, [(recipient.clone(), 10_000u32)]);
+
+        let payouts = compute_split(&env, 1_000_000, 250, &recipients).unwrap();
+        assert_eq!(payouts.fee, 25_000);
+        assert_eq!(payouts.shares.len(), 1);
+        assert_eq!(payouts.shares.get(0).unwrap(), (recipient, 975_000));
+    }
 }
