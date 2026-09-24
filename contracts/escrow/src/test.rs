@@ -1958,3 +1958,53 @@ fn test_state_machine_paid_refunded_allow_refund_via_fund() {
     );
     assert_eq!(client.get_escrow(&807u64).status, EscrowStatus::Funded);
 }
+
+// ─── set_fee_bps (issue #242) ────────────────────────────────────────────────
+
+#[test]
+fn test_set_fee_bps_requires_admin_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (contract_id, _admin, _treasury, client) = setup(&env);
+
+    // No auths at all: the admin's require_auth must fail.
+    env.set_auths(&[]);
+    assert!(client.try_set_fee_bps(&600u32).is_err());
+
+    // A non-admin signing the call is rejected too.
+    let attacker = Address::generate(&env);
+    let result = client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &attacker,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "set_fee_bps",
+                args: soroban_sdk::IntoVal::into_val(&(600u32,), &env),
+                sub_invokes: &[],
+            },
+        }])
+        .try_set_fee_bps(&600u32);
+    assert!(result.is_err());
+
+    assert_eq!(client.get_fee_bps(), 500u32);
+}
+
+#[test]
+fn test_set_fee_bps_accepts_change_within_step_limit() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_, _admin, _treasury, client) = setup(&env); // starts at 500 bps
+
+    // Exactly +500 (the maximum step) is allowed.
+    client.set_fee_bps(&1_000u32);
+    assert_eq!(client.get_fee_bps(), 1_000u32);
+
+    // Exactly -500 is allowed.
+    client.set_fee_bps(&500u32);
+    assert_eq!(client.get_fee_bps(), 500u32);
+
+    // Small moves, including down to zero, are allowed.
+    client.set_fee_bps(&250u32);
+    client.set_fee_bps(&0u32);
+    assert_eq!(client.get_fee_bps(), 0u32);
+}
