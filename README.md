@@ -562,8 +562,8 @@ cargo build --target wasm32v1-none --profile release-with-logs \
   -p mergefi-escrow -p mergefi-milestones -p mergefi-maintenance-pool
 ```
 
-Verified in this session: `cargo test --workspace` — **109/109 tests pass**
-(54 escrow, 31 milestones, 24 maintenance-pool, including the
+Verified: `cargo test --workspace` — **all tests pass** (the exact count
+grows as tests are added, so it is not tracked here; coverage includes the
 access-control boundary matrix, pause/oracle checks, and the multi-sponsor
 crowdfunding tests) on the native target using
 `soroban_sdk::testutils` (`Env::default()`, `Address::generate`,

@@ -125,6 +125,35 @@ fn test_release_issue_with_zero_fee_pays_full_allocation() {
 }
 
 #[test]
+fn test_release_issue_rejects_invalid_split() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &10_000_000_000i128);
+
+    client.create_milestone(
+        &11u64,
+        &sponsor,
+        &token_addr,
+        &10_000_000_000i128,
+        &1_000u64,
+    );
+    client.allocate(&11u64, &1101u64, &10_000_000_000i128);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+
+    // Splits sum to 9000, not 10000 -> invalid
+    let recipients = vec![&env, (alice.clone(), 5_000u32), (bob.clone(), 4_000u32)];
+    let err = client.try_release_issue(&11u64, &1101u64, &recipients);
+    assert_eq!(err, Err(Ok(Error::InvalidSplit)));
+}
+
+#[test]
 fn test_release_issue_distributes_rounding_dust_by_largest_remainder() {
     let env = Env::default();
     env.mock_all_auths();
@@ -674,7 +703,36 @@ fn test_get_contribution_enumerates_each_contributor() {
     assert_eq!(c1_topup.timestamp, env.ledger().timestamp());
 
     let err = client.try_get_contribution(&57u64, &2u32);
+    assert_eq!(err, Err(Ok(Error::ContributionNotFound)));
+}
+
+#[test]
+fn test_get_contribution_rejects_out_of_range_index_distinctly_from_missing_milestone() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let alice = Address::generate(&env);
+    asset_client.mint(&alice, &10_000i128);
+    client.create_milestone(&57u64, &alice, &token_addr, &4_000i128, &1_000u64);
+
+    let err = client.try_get_contribution(&57u64, &1u32);
+    assert_eq!(err, Err(Ok(Error::ContributionNotFound)));
+
+    let err = client.try_get_contribution(&999u64, &0u32);
     assert_eq!(err, Err(Ok(Error::MilestoneNotFound)));
+}
+
+#[test]
+fn test_view_calls_before_initialize_return_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register(MilestonesContract, ());
+    let client = MilestonesContractClient::new(&env, &contract_id);
+
+    let err = client.try_get_admin();
+    assert_eq!(err, Err(Ok(Error::NotInitialized)));
 }
 
 #[test]

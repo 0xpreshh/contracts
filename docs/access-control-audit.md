@@ -33,6 +33,14 @@ signature requirement on any particular address.
 | `recover_admin` | Recovery-only (initialize-time) | n/a | `recovery.require_auth()` | Match (new function) |
 | `set_treasury` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
 | `get_contributions` | Permissionless (view) | n/a | none | Match (new function) |
+| `pause` | Admin-only | n/a | `require_admin(...).require_auth()`; blocks new state-changing calls while set | Match (new function) |
+| `unpause` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `is_paused_view` | Permissionless (view) | n/a | none | Match (new function) |
+| `upgrade` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `get_version` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_oracle` | Admin-only | n/a | `require_admin(...).require_auth()` + `new_oracle.require_auth()` | Match (new function) |
+| `set_fee_bps` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `get_max_sponsors` | Permissionless (view) | n/a | none | Match (new function) |
 
 ## `contracts/milestones` (`mergefi-milestones`)
 
@@ -52,6 +60,18 @@ signature requirement on any particular address.
 | `set_admin` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
 | `recover_admin` | Recovery-only (initialize-time) | n/a | `recovery.require_auth()` | Match (new function) |
 | `set_treasury` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `pause` | Admin-only | n/a | `require_admin(...).require_auth()`; blocks new state-changing calls while set | Match (new function) |
+| `unpause` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `is_paused_view` | Permissionless (view) | n/a | none | Match (new function) |
+| `upgrade` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `get_version` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_oracle` | Admin-only | n/a | `require_admin(...).require_auth()` + `new_oracle.require_auth()` | Match (new function) |
+| `set_fee_bps` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `deallocate` | Admin-only | n/a | `require_admin(...).require_auth()`; **not pause-gated** (unlike `allocate`/`release_issue`) — a pause-gating inconsistency tracked separately | Match (new function) |
+| `cancel_milestone_after_deadline` | Permissionless after `deadline + GRACE_PERIOD` (deliberate) | n/a | none; rejects with `DeadlineNotPassed` before then | Match (new function) |
+| `get_max_sponsors` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_oracle` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_issue_status` | Permissionless (view) | n/a | none | Match (new function) |
 | `get_contribution` | Permissionless (view) | n/a | none | Match (new function) |
 
 ## `contracts/maintenance-pool` (`mergefi-maintenance-pool`)
@@ -64,6 +84,19 @@ signature requirement on any particular address.
 | `get_pool` | Permissionless (view) | none | unchanged | Match |
 | `get_deposit` | Permissionless (view) | none | unchanged | Match |
 | `keep_alive` | Permissionless (deliberate) | n/a | none | Match (new function) |
+| `pause` | Admin-only | n/a | `require_admin(...).require_auth()`; blocks new state-changing calls while set | Match (new function) |
+| `unpause` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `is_paused_view` | Permissionless (view) | n/a | none | Match (new function) |
+| `upgrade` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `get_version` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_oracle` | Admin-only | n/a | `require_admin(...).require_auth()` + `new_oracle.require_auth()` | Match (new function) |
+| `reclaim_deposit` | Sponsor-only | n/a | `sponsor.require_auth()`; intentionally **not** pause-gated so sponsors can always exit | Match (new function) |
+| `sweep` | Admin-only | n/a | `require_admin(...).require_auth()`; intentionally **not** pause-gated | Match (new function) |
+| `set_admin` | Admin-only | n/a | `require_admin(...).require_auth()` + `new_admin.require_auth()` | Match (new function) |
+| `set_treasury` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `recover_admin` | Recovery-only (initialize-time) | n/a | `recovery.require_auth()` + `new_admin.require_auth()` | Match (new function) |
+| `get_fee_bps` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_oracle` | Permissionless (view) | n/a | none | Match (new function) |
 
 ## Findings
 

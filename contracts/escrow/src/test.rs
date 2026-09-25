@@ -40,6 +40,19 @@ fn test_initialize_rejects_double_init() {
 }
 
 #[test]
+fn test_getters_return_not_initialized_before_initialize() {
+    let env = Env::default();
+    let contract_id = env.register(EscrowContract, ());
+    let client = EscrowContractClient::new(&env, &contract_id);
+
+    assert_eq!(client.try_get_admin(), Err(Ok(Error::NotInitialized)));
+    assert_eq!(client.try_get_oracle(), Err(Ok(Error::NotInitialized)));
+    assert_eq!(client.try_get_treasury(), Err(Ok(Error::NotInitialized)));
+    assert_eq!(client.try_get_fee_bps(), Err(Ok(Error::NotInitialized)));
+    assert_eq!(client.try_get_max_sponsors(), Err(Ok(Error::NotInitialized)));
+}
+
+#[test]
 fn test_initialize_rejects_fee_bps_above_10000() {
     let env = Env::default();
     env.mock_all_auths();
@@ -138,6 +151,39 @@ fn test_release_with_team_split() {
     assert_eq!(token_client.balance(&alice), alice_expected);
     assert_eq!(token_client.balance(&bob), bob_expected);
     assert_eq!(token_client.balance(&treasury), 50_0000000i128);
+}
+
+#[test]
+fn test_release_with_zero_fee_pays_full_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let contract_id = env.register(EscrowContract, ());
+    let client = EscrowContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &oracle, &treasury, &0u32, &None);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &10_000_000_000i128);
+
+    client.fund(
+        &1u64,
+        &sponsor,
+        &token_addr,
+        &10_000_000_000i128,
+        &1_000u64,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    let recipients = vec![&env, (contributor.clone(), 10_000u32)];
+    client.release(&1u64, &recipients);
+
+    assert_eq!(token_client.balance(&contributor), 10_000_000_000i128);
+    assert_eq!(token_client.balance(&treasury), 0i128);
 }
 
 #[test]
