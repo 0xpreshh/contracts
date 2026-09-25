@@ -3,10 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "description": "Deploy/invoke helper scripts for the MergeFi Soroban contracts, used when stellar-cli's own network client can't reach the RPC endpoint.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18.17.0"
+  },
   "type": "module",
   "scripts": {
     "deploy": "node scripts/deploy.mjs",
-    "invoke": "node scripts/invoke.mjs"
+    "invoke": "node scripts/invoke.mjs",
+    "test": "node --test scripts/*.test.mjs"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^16.0.1"

@@ -11,40 +11,24 @@ import {
   Address,
   rpc,
 } from "@stellar/stellar-sdk";
+import { submitAndWait } from "./lib/submit.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RPC_URL = process.env.RPC_URL || "https://soroban-testnet.stellar.org";
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || Networks.TESTNET;
 
 const server = new rpc.Server(RPC_URL);
-const deployerSecret = process.argv[2];
-const wasmPath = process.argv[3];
-const contractName = process.argv[4] ?? "contract";
+const deployerSecret = process.env.DEPLOYER_SECRET || process.argv[2];
+const wasmPath = process.env.DEPLOYER_SECRET ? process.argv[2] : process.argv[3];
+const contractName = (process.env.DEPLOYER_SECRET ? process.argv[3] : process.argv[4]) ?? "contract";
 
 if (!deployerSecret || !wasmPath) {
-  console.error("Usage: node deploy.mjs <secret> <wasm-path> [name]");
+  console.error("Usage: DEPLOYER_SECRET=S... node deploy.mjs <wasm-path> [name]");
+  console.error("   or: node deploy.mjs <secret> <wasm-path> [name] (insecure fallback)");
   process.exit(1);
 }
 
 const kp = Keypair.fromSecret(deployerSecret);
-
-async function submitAndWait(tx) {
-  const prepared = await server.prepareTransaction(tx);
-  prepared.sign(kp);
-  const sendResult = await server.sendTransaction(prepared);
-  if (sendResult.status === "ERROR") {
-    throw new Error(`Send failed: ${JSON.stringify(sendResult.errorResult)}`);
-  }
-  let getResult = await server.getTransaction(sendResult.hash);
-  while (getResult.status === "NOT_FOUND") {
-    await new Promise((r) => setTimeout(r, 1500));
-    getResult = await server.getTransaction(sendResult.hash);
-  }
-  if (getResult.status !== "SUCCESS") {
-    throw new Error(`Tx failed: ${JSON.stringify(getResult)}`);
-  }
-  return getResult;
-}
 
 async function main() {
   const wasmBuffer = fs.readFileSync(path.resolve(process.cwd(), wasmPath));
@@ -60,7 +44,7 @@ async function main() {
     .setTimeout(60)
     .build();
 
-  const uploadResult = await submitAndWait(uploadTx);
+  const { getResult: uploadResult } = await submitAndWait(server, kp, uploadTx);
   const wasmHash = uploadResult.returnValue.bytes();
   console.log(`[${contractName}] wasm uploaded, hash: ${wasmHash.toString("hex")}`);
 
@@ -80,7 +64,7 @@ async function main() {
     .setTimeout(60)
     .build();
 
-  const createResult = await submitAndWait(createTx);
+  const { getResult: createResult } = await submitAndWait(server, kp, createTx);
   const contractAddress = Address.fromScAddress(
     createResult.returnValue.address(),
   ).toString();

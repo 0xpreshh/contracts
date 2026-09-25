@@ -8,9 +8,7 @@ use soroban_sdk::{contracttype, Address, Map};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Milestone {
     /// The original funder (the address that called `create_milestone`).
-    /// Retained for backward compatibility with the single-sponsor API; it
-    /// is always identical to contribution index `0` in the contribution
-    /// ledger and never changes, so it cannot drift out of sync.
+    /// Preserved as index 0 in the contribution ledger for display and indexing convenience.
     pub sponsor: Address,
     pub token: Address,
     /// Running sum of every accepted contribution (starts at the
@@ -45,6 +43,7 @@ pub struct Milestone {
 pub struct Contribution {
     pub sponsor: Address,
     pub amount: i128,
+    pub timestamp: u64,
 }
 
 #[contracttype]
@@ -58,9 +57,13 @@ pub enum IssueStatus {
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
+    Oracle,
+    Recovery,
     Treasury,
     FeeBps,
     MaxSponsors,
+    Paused,
+    Version,
     Milestone(u64),
     IssueStatus(u64, u64),  // (milestone_id, issue_id)
     Contribution(u64, u32), // (milestone_id, contribution_index)
@@ -69,5 +72,23 @@ pub enum DataKey {
 impl mergefi_common::AdminKey for DataKey {
     fn admin_key() -> Self {
         DataKey::Admin
+    }
+}
+
+impl mergefi_common::OracleKey for DataKey {
+    fn oracle_key() -> Self {
+        DataKey::Oracle
+    }
+}
+
+impl mergefi_common::TreasuryKey for DataKey {
+    fn treasury_key() -> Self {
+        DataKey::Treasury
+    }
+}
+
+impl mergefi_common::FeeBpsKey for DataKey {
+    fn fee_bps_key() -> Self {
+        DataKey::FeeBps
     }
 }
