@@ -32,8 +32,12 @@ pub struct Deposit {
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
+    Oracle,
+    Recovery,
     Treasury,
     FeeBps,
+    Paused,
+    Version,
     Pool(u64),
     Deposit(u64, u32), // (pool_id, deposit_index)
 }
@@ -41,5 +45,23 @@ pub enum DataKey {
 impl mergefi_common::AdminKey for DataKey {
     fn admin_key() -> Self {
         DataKey::Admin
+    }
+}
+
+impl mergefi_common::OracleKey for DataKey {
+    fn oracle_key() -> Self {
+        DataKey::Oracle
+    }
+}
+
+impl mergefi_common::TreasuryKey for DataKey {
+    fn treasury_key() -> Self {
+        DataKey::Treasury
+    }
+}
+
+impl mergefi_common::FeeBpsKey for DataKey {
+    fn fee_bps_key() -> Self {
+        DataKey::FeeBps
     }
 }
