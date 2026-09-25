@@ -893,3 +893,41 @@ fn test_upgrade_preserves_pool_with_multiple_deposits() {
         1_000i128
     );
 }
+
+#[test]
+fn test_set_treasury_requires_admin_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, treasury, client) = setup(&env);
+
+    env.set_auths(&[]);
+    let new_treasury = Address::generate(&env);
+    let result = client.try_set_treasury(&new_treasury);
+    assert!(result.is_err());
+    assert_eq!(client.get_treasury(), treasury);
+}
+
+#[test]
+fn test_set_treasury_updates_fee_recipient() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, old_treasury, client) = setup(&env);
+
+    let new_treasury = Address::generate(&env);
+    client.set_treasury(&new_treasury);
+    assert_eq!(client.get_treasury(), new_treasury);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &10_000_000_000i128);
+    client.deposit(&253u64, &sponsor, &token_addr, &10_000_000_000i128);
+
+    let maintainer = Address::generate(&env);
+    client.withdraw(&253u64, &maintainer, &200_0000000i128);
+
+    // 10% fee lands on the new treasury, none on the old one.
+    assert_eq!(token_client.balance(&new_treasury), 20_0000000i128);
+    assert_eq!(token_client.balance(&old_treasury), 0i128);
+    assert_eq!(token_client.balance(&maintainer), 180_0000000i128);
+}
