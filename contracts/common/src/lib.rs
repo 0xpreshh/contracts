@@ -20,6 +20,13 @@ where
     env.storage().instance().get(&K::admin_key())
 }
 
+/// Extends the persistent storage TTL using fixed thresholds.
+///
+/// At ~5 seconds per ledger close (Stellar testnet/mainnet average, see `APPROX_SECONDS_PER_LEDGER`):
+/// - `threshold = 100_000` ledgers corresponds to ~500,000 seconds (~5.78 days).
+///   Extension is only performed if remaining TTL is below this threshold.
+/// - `extend_to = 500_000` ledgers corresponds to ~2,500,000 seconds (~28.93 days).
+///   When triggered, TTL is extended to approximately 29 days of runway.
 /// Trait to identify the Oracle key for a contract's DataKey enum.
 /// Oracle is authorized for routine operations like release/withdraw.
 pub trait OracleKey {
