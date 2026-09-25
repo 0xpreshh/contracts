@@ -895,6 +895,41 @@ fn test_upgrade_preserves_pool_with_multiple_deposits() {
 }
 
 #[test]
+fn test_set_oracle_requires_admin_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    env.set_auths(&[]);
+    let new_oracle = Address::generate(&env);
+    let result = client.try_set_oracle(&new_oracle);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_set_oracle_rotates_oracle_used_by_withdraw() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let old_oracle = client.get_oracle();
+    let new_oracle = Address::generate(&env);
+    client.set_oracle(&new_oracle);
+    assert_eq!(client.get_oracle(), new_oracle);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &100_0000000i128);
+    client.deposit(&7u64, &sponsor, &token_addr, &100_0000000i128);
+
+    let maintainer = Address::generate(&env);
+    client.withdraw(&7u64, &maintainer, &50_0000000i128);
+
+    // withdraw now requires the rotated oracle's authorization, not the old one's.
+    let auths = env.auths();
+    assert!(auths.iter().any(|(addr, _)| addr == new_oracle));
+    assert!(!auths.iter().any(|(addr, _)| addr == old_oracle));
 fn test_set_treasury_requires_admin_auth() {
     let env = Env::default();
     env.mock_all_auths();
