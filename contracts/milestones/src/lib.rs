@@ -757,6 +757,13 @@ impl MilestonesContract {
         Ok(contributions)
     }
 
+    pub fn get_fee_bps(env: Env) -> Result<u32, Error> {
+        env.storage()
+            .instance()
+            .get(&DataKey::FeeBps)
+            .ok_or(Error::NotInitialized)
+    }
+
     pub fn get_max_sponsors(env: Env) -> Result<u32, Error> {
         env.storage()
             .instance()

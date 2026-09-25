@@ -45,6 +45,14 @@ fn test_initialize_rejects_fee_bps_above_10000() {
 }
 
 #[test]
+fn test_get_fee_bps_returns_configured_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+    assert_eq!(client.get_fee_bps(), 500u32);
+}
+
+#[test]
 fn test_create_milestone_allocate_and_release_per_issue() {
     let env = Env::default();
     env.mock_all_auths();
