@@ -464,7 +464,14 @@ impl MilestonesContract {
     ///
     /// Rejects if the issue is already Released (funds have left the
     /// contract) or not currently Allocated.
+    ///
+    /// Blocked while the contract is paused, like `allocate`, since it
+    /// mutates the same allocation state.
     pub fn deallocate(env: Env, milestone_id: u64, issue_id: u64) -> Result<(), Error> {
+        if is_paused(&env) {
+            return Err(Error::ContractPaused);
+        }
+
         require_admin(&env)?.require_auth();
 
         let mkey = DataKey::Milestone(milestone_id);
@@ -507,7 +514,8 @@ impl MilestonesContract {
     }
 
     /// Pause the contract, blocking new milestones, contributions,
-    /// allocations, and release payouts. Refund/recovery paths remain open.
+    /// allocations, deallocations, and release payouts. Refund/recovery paths
+    /// remain open.
     pub fn pause(env: Env) -> Result<(), Error> {
         let admin = require_admin(&env)?;
         admin.require_auth();
