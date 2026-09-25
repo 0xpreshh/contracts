@@ -410,8 +410,11 @@ impl EscrowContract {
         let mut is_contributor = false;
         for i in 0..escrow.contributor_count {
             let contribution_key = DataKey::Contribution(issue_id, i);
-            let contribution: Contribution =
-                env.storage().persistent().get(&contribution_key).unwrap();
+            let contribution: Contribution = env
+                .storage()
+                .persistent()
+                .get(&contribution_key)
+                .ok_or(Error::ContributionNotFound)?;
             if contribution.sponsor == caller {
                 is_contributor = true;
                 break;
@@ -545,6 +548,14 @@ impl EscrowContract {
             .instance()
             .get(&DataKey::FeeBps)
             .ok_or(Error::NotInitialized)
+    }
+
+    pub fn set_treasury(env: Env, new_treasury: Address) -> Result<(), Error> {
+        let admin = require_admin(&env)?;
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Treasury, &new_treasury);
+        extend_instance_ttl(&env);
+        Ok(())
     }
 
     pub fn get_max_sponsors(env: Env) -> Result<u32, Error> {

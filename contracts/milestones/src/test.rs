@@ -651,3 +651,28 @@ fn test_get_contribution_enumerates_each_contributor() {
     let err = client.try_get_contribution(&57u64, &2u32);
     assert_eq!(err, Err(Ok(Error::MilestoneNotFound)));
 }
+
+#[test]
+fn test_get_contributions_returns_all_contributions() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    asset_client.mint(&alice, &10_000i128);
+    asset_client.mint(&bob, &10_000i128);
+
+    client.create_milestone(&58u64, &alice, &token_addr, &4_000i128, &1_000u64);
+    client.contribute(&58u64, &bob, &6_000i128);
+
+    let list = client.get_contributions(&58u64);
+    assert_eq!(list.len(), 2);
+    assert_eq!(list.get(0).unwrap().sponsor, alice);
+    assert_eq!(list.get(0).unwrap().amount, 4_000i128);
+    assert_eq!(list.get(1).unwrap().sponsor, bob);
+    assert_eq!(list.get(1).unwrap().amount, 6_000i128);
+}
+

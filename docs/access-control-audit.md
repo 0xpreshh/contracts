@@ -28,6 +28,7 @@ signature requirement on any particular address.
 | `keep_alive` | Permissionless (deliberate) | n/a | none | Match (new function) |
 | `get_contribution` | Permissionless (view) | n/a | none | Match (new function) |
 | `get_contributions` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_treasury` | Admin-only | n/a | `require_admin(&env)?.require_auth()` | Match (new function) |
 
 ## `contracts/milestones` (`mergefi-milestones`)
 
@@ -43,6 +44,7 @@ signature requirement on any particular address.
 | `contribute` | Sponsor-only | n/a | `sponsor.require_auth()` | Match (new function) |
 | `keep_alive` | Permissionless (deliberate) | n/a | none | Match (new function) |
 | `get_contribution` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_contributions` | Permissionless (view) | n/a | none | Match (new function) |
 
 ## `contracts/maintenance-pool` (`mergefi-maintenance-pool`)
 
