@@ -125,6 +125,35 @@ fn test_release_issue_with_zero_fee_pays_full_allocation() {
 }
 
 #[test]
+fn test_release_issue_rejects_invalid_split() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &10_000_000_000i128);
+
+    client.create_milestone(
+        &11u64,
+        &sponsor,
+        &token_addr,
+        &10_000_000_000i128,
+        &1_000u64,
+    );
+    client.allocate(&11u64, &1101u64, &10_000_000_000i128);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+
+    // Splits sum to 9000, not 10000 -> invalid
+    let recipients = vec![&env, (alice.clone(), 5_000u32), (bob.clone(), 4_000u32)];
+    let err = client.try_release_issue(&11u64, &1101u64, &recipients);
+    assert_eq!(err, Err(Ok(Error::InvalidSplit)));
+}
+
+#[test]
 fn test_release_issue_distributes_rounding_dust_by_largest_remainder() {
     let env = Env::default();
     env.mock_all_auths();

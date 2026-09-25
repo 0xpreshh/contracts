@@ -120,6 +120,69 @@ fn test_withdraw_deducts_fee_and_balance() {
 }
 
 #[test]
+fn test_withdraw_with_zero_fee_pays_full_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let contract_id = env.register(MaintenancePoolContract, ());
+    let client = MaintenancePoolContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &oracle, &treasury, &0u32, &None);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &10_000_000_000i128);
+    client.deposit(&2u64, &sponsor, &token_addr, &10_000_000_000i128);
+
+    let maintainer = Address::generate(&env);
+    client.withdraw(&2u64, &maintainer, &200_0000000i128);
+
+    assert_eq!(token_client.balance(&maintainer), 200_0000000i128);
+    assert_eq!(token_client.balance(&treasury), 0i128);
+
+    let pool = client.get_pool(&2u64);
+    assert_eq!(pool.balance, 800_0000000i128);
+    assert_eq!(pool.total_withdrawn, 200_0000000i128);
+}
+
+#[test]
+fn test_deposit_rejects_invalid_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, _asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+
+    let err = client.try_deposit(&4u64, &sponsor, &token_addr, &0i128);
+    assert_eq!(err, Err(Ok(Error::InvalidAmount)));
+    let err = client.try_deposit(&4u64, &sponsor, &token_addr, &-1i128);
+    assert_eq!(err, Err(Ok(Error::InvalidAmount)));
+}
+
+#[test]
+fn test_withdraw_rejects_invalid_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &100_0000000i128);
+    client.deposit(&5u64, &sponsor, &token_addr, &100_0000000i128);
+
+    let maintainer = Address::generate(&env);
+    let err = client.try_withdraw(&5u64, &maintainer, &0i128);
+    assert_eq!(err, Err(Ok(Error::InvalidAmount)));
+    let err = client.try_withdraw(&5u64, &maintainer, &-1i128);
+    assert_eq!(err, Err(Ok(Error::InvalidAmount)));
+}
+
+#[test]
 fn test_withdraw_rejects_insufficient_balance() {
     let env = Env::default();
     env.mock_all_auths();
