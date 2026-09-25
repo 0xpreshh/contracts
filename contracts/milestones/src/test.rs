@@ -1468,3 +1468,63 @@ fn test_state_machine_allocate_rejects_duplicate_allocation() {
     let err = client.try_allocate(&908u64, &9081u64, &5_000i128);
     assert_eq!(err, Err(Ok(Error::IssueAlreadyAllocated)));
 }
+
+#[test]
+fn test_create_milestone_rejects_duplicate_id_with_milestone_already_exists() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &20_000_000_000i128);
+
+    client.create_milestone(&1u64, &sponsor, &token_addr, &10_000_000_000i128, &1_000u64);
+
+    let err =
+        client.try_create_milestone(&1u64, &sponsor, &token_addr, &10_000_000_000i128, &1_000u64);
+    assert_eq!(err, Err(Ok(Error::MilestoneAlreadyExists)));
+}
+
+#[test]
+fn test_set_treasury_requires_admin_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    env.set_auths(&[]);
+    let new_treasury = Address::generate(&env);
+    let result = client.try_set_treasury(&new_treasury);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_set_treasury_updates_fee_recipient() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, old_treasury, client) = setup(&env);
+
+    let new_treasury = Address::generate(&env);
+    client.set_treasury(&new_treasury);
+    assert_eq!(client.get_treasury(), new_treasury);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &10_000_000_000i128);
+    client.create_milestone(&1u64, &sponsor, &token_addr, &10_000_000_000i128, &1_000u64);
+    client.allocate(&1u64, &101u64, &1_000_0000000i128);
+
+    let contributor = Address::generate(&env);
+    client.release_issue(
+        &1u64,
+        &101u64,
+        &vec![&env, (contributor.clone(), 10_000u32)],
+    );
+
+    // 5% fee lands on the new treasury, not the old one.
+    assert_eq!(token_client.balance(&new_treasury), 50_0000000i128);
+    assert_eq!(token_client.balance(&old_treasury), 0);
+    assert_eq!(token_client.balance(&contributor), 950_0000000i128);
+}
