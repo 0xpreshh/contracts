@@ -369,6 +369,45 @@ fn test_allocate_requires_admin_auth() {
 }
 
 #[test]
+fn test_deallocate_requires_admin_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &10_000_000_000i128);
+    client.create_milestone(&7u64, &sponsor, &token_addr, &10_000_000_000i128, &1_000u64);
+    client.allocate(&7u64, &701u64, &100_0000000i128);
+
+    env.set_auths(&[]);
+    let result = client.try_deallocate(&7u64, &701u64);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_deallocate_blocked_while_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &10_000_000_000i128);
+    client.create_milestone(&95u64, &sponsor, &token_addr, &10_000_000_000i128, &1_000u64);
+    client.allocate(&95u64, &950u64, &1_000_000_000i128);
+
+    client.pause();
+    let result = client.try_deallocate(&95u64, &950u64);
+    assert_eq!(result, Err(Ok(Error::ContractPaused)));
+
+    client.unpause();
+    client.deallocate(&95u64, &950u64);
+}
+
+#[test]
 fn test_release_issue_requires_admin_auth() {
     let env = Env::default();
     env.mock_all_auths();
@@ -921,6 +960,9 @@ fn test_pause_blocks_commitment_paths_but_allows_cancel() {
 
     let allocate_err = client.try_allocate(&90u64, &901u64, &1_000_000_000i128);
     assert_eq!(allocate_err, Err(Ok(Error::ContractPaused)));
+
+    let deallocate_err = client.try_deallocate(&90u64, &900u64);
+    assert_eq!(deallocate_err, Err(Ok(Error::ContractPaused)));
 
     let recipients = vec![&env, (recipient, 10_000u32)];
     let release_err = client.try_release_issue(&90u64, &900u64, &recipients);
