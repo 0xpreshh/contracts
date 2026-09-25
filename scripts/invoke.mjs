@@ -14,8 +14,22 @@ const RPC_URL = process.env.RPC_URL || "https://soroban-testnet.stellar.org";
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || Networks.TESTNET;
 const server = new rpc.Server(RPC_URL);
 
-const [, , secret, contractId, method, ...args] = process.argv;
+let secret = process.env.INVOKER_SECRET || process.env.DEPLOYER_SECRET;
+let contractId, method, args;
+
+if (secret) {
+  [, , contractId, method, ...args] = process.argv;
+} else {
+  [, , secret, contractId, method, ...args] = process.argv;
+}
+
 if (!secret || !contractId || !method) {
+  console.error("Usage: INVOKER_SECRET=S... node invoke.mjs <contractId> <method> [args...]");
+  console.error("   or: node invoke.mjs <secret> <contractId> <method> [args...] (insecure fallback)");
+  process.exit(1);
+}
+
+export function parseArg(raw) {
   console.error("Usage: node invoke.mjs <secret> <contractId> <method> [args as address:G..., u32:123, u64:123, i128:123, or none]");
   process.exit(1);
 }
@@ -28,6 +42,7 @@ function parseArg(raw) {
   if (type === "u32") return nativeToScVal(parseInt(value, 10), { type: "u32" });
   if (type === "u64") return nativeToScVal(BigInt(value), { type: "u64" });
   if (type === "i128") return nativeToScVal(BigInt(value), { type: "i128" });
+  if (type === "none" || raw === "none") return nativeToScVal(null, { type: "void" });
   throw new Error(`Unknown arg type: ${type}`);
 }
 
