@@ -718,10 +718,17 @@ impl MilestonesContract {
         milestone_id: u64,
         index: u32,
     ) -> Result<Contribution, Error> {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::Milestone(milestone_id))
+        {
+            return Err(Error::MilestoneNotFound);
+        }
         env.storage()
             .persistent()
             .get(&DataKey::Contribution(milestone_id, index))
-            .ok_or(Error::MilestoneNotFound)
+            .ok_or(Error::ContributionNotFound)
     }
 
     pub fn get_max_sponsors(env: Env) -> Result<u32, Error> {
