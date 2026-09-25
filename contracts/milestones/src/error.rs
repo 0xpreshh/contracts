@@ -28,4 +28,6 @@ pub enum Error {
     IssueNotAllocatedForDeallocate = 17,
     /// Contract is paused and this operation is not allowed (issue #14).
     ContractPaused = 18,
+    /// The contribution index is out of range for an existing milestone (issue #256).
+    ContributionNotFound = 19,
 }
