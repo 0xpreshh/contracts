@@ -37,15 +37,19 @@ pub struct Escrow {
 pub struct Contribution {
     pub sponsor: Address,
     pub amount: i128,
+    pub timestamp: u64,
 }
 
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
+    Oracle, // NEW: Oracle role for release operations
     Treasury,
     FeeBps,
     MaxSponsors,
+    Paused,  // NEW: Pause/unpause flag
+    Version, // NEW: Storage version for migrations
     Escrow(u64),
     Contribution(u64, u32), // (issue_id, contribution_index)
 }
@@ -53,5 +57,23 @@ pub enum DataKey {
 impl mergefi_common::AdminKey for DataKey {
     fn admin_key() -> Self {
         DataKey::Admin
+    }
+}
+
+impl mergefi_common::OracleKey for DataKey {
+    fn oracle_key() -> Self {
+        DataKey::Oracle
+    }
+}
+
+impl mergefi_common::TreasuryKey for DataKey {
+    fn treasury_key() -> Self {
+        DataKey::Treasury
+    }
+}
+
+impl mergefi_common::FeeBpsKey for DataKey {
+    fn fee_bps_key() -> Self {
+        DataKey::FeeBps
     }
 }

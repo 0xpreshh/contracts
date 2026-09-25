@@ -17,8 +17,8 @@ signature requirement on any particular address.
 | `initialize` | Deployer/authorized setup only (implicit — not written down anywhere) | none | `admin.require_auth()` | **Mismatch, fixed** — see "`initialize` has no access control" below |
 | `fund` | Sponsor-only | `sponsor.require_auth()` | unchanged | Match |
 | `release` | Admin-only | `require_admin(&env)?.require_auth()` | unchanged | Match |
-| `refund` (before `deadline`) | Admin-only | `require_admin(&env)?.require_auth()` | unchanged | Match |
-| `refund` (at/after `deadline`) | Permissionless (deliberate) | none | unchanged | Match — see [refund analysis](./refund-permissionless-analysis.md) |
+| `refund` (before `deadline + GRACE_PERIOD`) | Admin-only | `require_admin(&env)?.require_auth()` | unchanged | Match |
+| `refund` (at/after `deadline + GRACE_PERIOD`) | Permissionless (deliberate) | none | unchanged | Match — see [refund analysis](./refund-permissionless-analysis.md). The permissionless window opens at `deadline + GRACE_PERIOD`, not at `deadline` itself; the 14-day `GRACE_PERIOD` was introduced by [#49](https://github.com/MergeFi/contracts/issues/49) to close a race where a sponsor could call permissionless `refund()` right at `deadline` to claw back funds from a contributor whose `release()` had already landed. |
 | `extend_deadline` (new, this PR) | Sponsor-only, monotonic | n/a | `escrow.sponsor.require_auth()` + `new_deadline` must strictly increase | Match (new function) |
 | `get_escrow` | Permissionless (view) | none | unchanged | Match |
 | `get_admin` | Permissionless (view) | none | unchanged | Match |
@@ -27,7 +27,21 @@ signature requirement on any particular address.
 | `contribute` | Sponsor-only | n/a | `sponsor.require_auth()` | Match (new function) |
 | `keep_alive` | Permissionless (deliberate) | n/a | none | Match (new function) |
 | `get_contribution` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_admin` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_treasury` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_admin` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `recover_admin` | Recovery-only (initialize-time) | n/a | `recovery.require_auth()` | Match (new function) |
+| `set_treasury` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
 | `get_contributions` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_treasury` | Admin-only | n/a | `require_admin(&env)?.require_auth()` | Match (new function) |
+| `pause` | Admin-only | n/a | `require_admin(...).require_auth()`; blocks new state-changing calls while set | Match (new function) |
+| `unpause` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `is_paused_view` | Permissionless (view) | n/a | none | Match (new function) |
+| `upgrade` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `get_version` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_oracle` | Admin-only | n/a | `require_admin(...).require_auth()` + `new_oracle.require_auth()` | Match (new function) |
+| `set_fee_bps` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `get_max_sponsors` | Permissionless (view) | n/a | none | Match (new function) |
 
 ## `contracts/milestones` (`mergefi-milestones`)
 
@@ -42,7 +56,25 @@ signature requirement on any particular address.
 | `get_issue_status` | Permissionless (view) | none | unchanged | Match |
 | `contribute` | Sponsor-only | n/a | `sponsor.require_auth()` | Match (new function) |
 | `keep_alive` | Permissionless (deliberate) | n/a | none | Match (new function) |
+| `get_admin` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_treasury` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_admin` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `recover_admin` | Recovery-only (initialize-time) | n/a | `recovery.require_auth()` | Match (new function) |
+| `set_treasury` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `pause` | Admin-only | n/a | `require_admin(...).require_auth()`; blocks new state-changing calls while set | Match (new function) |
+| `unpause` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `is_paused_view` | Permissionless (view) | n/a | none | Match (new function) |
+| `upgrade` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `get_version` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_oracle` | Admin-only | n/a | `require_admin(...).require_auth()` + `new_oracle.require_auth()` | Match (new function) |
+| `set_fee_bps` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `deallocate` | Admin-only | n/a | `require_admin(...).require_auth()`; **not pause-gated** (unlike `allocate`/`release_issue`) — a pause-gating inconsistency tracked separately | Match (new function) |
+| `cancel_milestone_after_deadline` | Permissionless after `deadline + GRACE_PERIOD` (deliberate) | n/a | none; rejects with `DeadlineNotPassed` before then | Match (new function) |
+| `get_max_sponsors` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_oracle` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_issue_status` | Permissionless (view) | n/a | none | Match (new function) |
 | `get_contribution` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_contributions` | Permissionless (view) | n/a | none | Match (new function) |
 
 ## `contracts/maintenance-pool` (`mergefi-maintenance-pool`)
 
@@ -54,6 +86,19 @@ signature requirement on any particular address.
 | `get_pool` | Permissionless (view) | none | unchanged | Match |
 | `get_deposit` | Permissionless (view) | none | unchanged | Match |
 | `keep_alive` | Permissionless (deliberate) | n/a | none | Match (new function) |
+| `pause` | Admin-only | n/a | `require_admin(...).require_auth()`; blocks new state-changing calls while set | Match (new function) |
+| `unpause` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `is_paused_view` | Permissionless (view) | n/a | none | Match (new function) |
+| `upgrade` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `get_version` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_oracle` | Admin-only | n/a | `require_admin(...).require_auth()` + `new_oracle.require_auth()` | Match (new function) |
+| `reclaim_deposit` | Sponsor-only | n/a | `sponsor.require_auth()`; intentionally **not** pause-gated so sponsors can always exit | Match (new function) |
+| `sweep` | Admin-only | n/a | `require_admin(...).require_auth()`; intentionally **not** pause-gated | Match (new function) |
+| `set_admin` | Admin-only | n/a | `require_admin(...).require_auth()` + `new_admin.require_auth()` | Match (new function) |
+| `set_treasury` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
+| `recover_admin` | Recovery-only (initialize-time) | n/a | `recovery.require_auth()` + `new_admin.require_auth()` | Match (new function) |
+| `get_fee_bps` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_oracle` | Permissionless (view) | n/a | none | Match (new function) |
 
 ## Findings
 
@@ -154,3 +199,9 @@ maintenance operations.
 - `escrow::fund`'s `deadline` parameter is unvalidated (can be set in
   the past) — tracked in
   [#21](https://github.com/MergeFi/contracts/issues/21).
+
+## Recovery-address rationale
+
+For the explicit reasoning behind the optional `recovery` address (set at
+initialize and usable only with `recover_admin`), see
+[docs/recovery-address-justification.md](recovery-address-justification.md#L1).
