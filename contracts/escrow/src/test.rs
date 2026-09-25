@@ -40,6 +40,19 @@ fn test_initialize_rejects_double_init() {
 }
 
 #[test]
+fn test_getters_return_not_initialized_before_initialize() {
+    let env = Env::default();
+    let contract_id = env.register(EscrowContract, ());
+    let client = EscrowContractClient::new(&env, &contract_id);
+
+    assert_eq!(client.try_get_admin(), Err(Ok(Error::NotInitialized)));
+    assert_eq!(client.try_get_oracle(), Err(Ok(Error::NotInitialized)));
+    assert_eq!(client.try_get_treasury(), Err(Ok(Error::NotInitialized)));
+    assert_eq!(client.try_get_fee_bps(), Err(Ok(Error::NotInitialized)));
+    assert_eq!(client.try_get_max_sponsors(), Err(Ok(Error::NotInitialized)));
+}
+
+#[test]
 fn test_initialize_rejects_fee_bps_above_10000() {
     let env = Env::default();
     env.mock_all_auths();
