@@ -8,9 +8,7 @@ use soroban_sdk::{contracttype, Address, Map};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Milestone {
     /// The original funder (the address that called `create_milestone`).
-    /// Retained for backward compatibility with the single-sponsor API; it
-    /// is always identical to contribution index `0` in the contribution
-    /// ledger and never changes, so it cannot drift out of sync.
+    /// Preserved as index 0 in the contribution ledger for display and indexing convenience.
     pub sponsor: Address,
     pub token: Address,
     /// Running sum of every accepted contribution (starts at the

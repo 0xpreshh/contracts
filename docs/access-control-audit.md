@@ -33,6 +33,7 @@ signature requirement on any particular address.
 | `recover_admin` | Recovery-only (initialize-time) | n/a | `recovery.require_auth()` | Match (new function) |
 | `set_treasury` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
 | `get_contributions` | Permissionless (view) | n/a | none | Match (new function) |
+| `set_treasury` | Admin-only | n/a | `require_admin(&env)?.require_auth()` | Match (new function) |
 | `pause` | Admin-only | n/a | `require_admin(...).require_auth()`; blocks new state-changing calls while set | Match (new function) |
 | `unpause` | Admin-only | n/a | `require_admin(...).require_auth()` | Match (new function) |
 | `is_paused_view` | Permissionless (view) | n/a | none | Match (new function) |
@@ -73,6 +74,7 @@ signature requirement on any particular address.
 | `get_oracle` | Permissionless (view) | n/a | none | Match (new function) |
 | `get_issue_status` | Permissionless (view) | n/a | none | Match (new function) |
 | `get_contribution` | Permissionless (view) | n/a | none | Match (new function) |
+| `get_contributions` | Permissionless (view) | n/a | none | Match (new function) |
 
 ## `contracts/maintenance-pool` (`mergefi-maintenance-pool`)
 

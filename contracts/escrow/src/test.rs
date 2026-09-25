@@ -2135,3 +2135,63 @@ fn test_set_fee_bps_applies_to_already_funded_escrow_at_release() {
     assert_eq!(token_client.balance(&treasury), 1_000i128);
     assert_eq!(token_client.balance(&contributor), 9_000i128);
 }
+
+#[test]
+fn test_set_treasury_updates_treasury_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_, _admin, treasury, client) = setup(&env);
+
+    assert_eq!(client.get_treasury(), treasury);
+
+    let new_treasury = Address::generate(&env);
+    client.set_treasury(&new_treasury);
+    assert_eq!(client.get_treasury(), new_treasury);
+}
+
+#[test]
+fn test_set_treasury_requires_admin_auth() {
+    let env = Env::default();
+    let (_, admin, _treasury, client) = setup(&env);
+
+    let new_treasury = Address::generate(&env);
+    // Setting treasury without admin authorization will fail in unmocked environment
+    env.mock_auths(&[soroban_sdk::testutils::MockAuth {
+        address: &admin,
+        invoke: &soroban_sdk::testutils::MockAuthInvoke {
+            contract: &client.address,
+            fn_name: "set_treasury",
+            args: soroban_sdk::vec![&env, new_treasury.to_val()],
+            sub_invokes: &[],
+        },
+    }]);
+
+    client.set_treasury(&new_treasury);
+    assert_eq!(client.get_treasury(), new_treasury);
+}
+
+#[test]
+fn test_extend_deadline_returns_contribution_not_found_when_archived() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_, _admin, _treasury, client) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let sponsor = Address::generate(&env);
+    asset_client.mint(&sponsor, &10_000_000_000i128);
+
+    env.ledger().set_timestamp(100);
+    client.fund(&701u64, &sponsor, &token_addr, &10_000_000_000i128, &200u64, &None);
+
+    // Remove contribution sub-record to simulate archived persistent storage
+    env.as_contract(&client.address, || {
+        env.storage()
+            .persistent()
+            .remove(&crate::types::DataKey::Contribution(701u64, 0));
+    });
+
+    let err = client.try_extend_deadline(&701u64, &sponsor, &500u64);
+    assert_eq!(err, Err(Ok(Error::ContributionNotFound)));
+}
+

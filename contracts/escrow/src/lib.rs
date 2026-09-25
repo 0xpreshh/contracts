@@ -462,8 +462,11 @@ impl EscrowContract {
         let mut is_contributor = false;
         for i in 0..escrow.contributor_count {
             let contribution_key = DataKey::Contribution(issue_id, i);
-            let contribution: Contribution =
-                env.storage().persistent().get(&contribution_key).unwrap();
+            let contribution: Contribution = env
+                .storage()
+                .persistent()
+                .get(&contribution_key)
+                .ok_or(Error::ContributionNotFound)?;
             if contribution.sponsor == caller {
                 is_contributor = true;
                 break;
@@ -677,6 +680,12 @@ impl EscrowContract {
             .ok_or(Error::NotInitialized)
     }
 
+    pub fn set_treasury(env: Env, new_treasury: Address) -> Result<(), Error> {
+        let admin = require_admin(&env)?;
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Treasury, &new_treasury);
+        extend_instance_ttl(&env);
+        Ok(())
     pub fn get_version(env: Env) -> u32 {
         env.storage().instance().get(&DataKey::Version).unwrap_or(0)
     }

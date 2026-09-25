@@ -765,6 +765,7 @@ fn test_get_contribution_rejects_out_of_range_index_distinctly_from_missing_mile
 }
 
 #[test]
+fn test_get_contributions_returns_all_contributions() {
 fn test_view_calls_before_initialize_return_not_initialized() {
     let env = Env::default();
     let contract_id = env.register(MilestonesContract, ());
@@ -1469,6 +1470,22 @@ fn test_state_machine_cancel_milestone_rejects_double_cancel() {
 
     let token_admin = Address::generate(&env);
     let (token_addr, asset_client, _token_client) = create_token(&env, &token_admin);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    asset_client.mint(&alice, &10_000i128);
+    asset_client.mint(&bob, &10_000i128);
+
+    client.create_milestone(&58u64, &alice, &token_addr, &4_000i128, &1_000u64);
+    client.contribute(&58u64, &bob, &6_000i128);
+
+    let list = client.get_contributions(&58u64);
+    assert_eq!(list.len(), 2);
+    assert_eq!(list.get(0).unwrap().sponsor, alice);
+    assert_eq!(list.get(0).unwrap().amount, 4_000i128);
+    assert_eq!(list.get(1).unwrap().sponsor, bob);
+    assert_eq!(list.get(1).unwrap().amount, 6_000i128);
+}
+
     let sponsor = Address::generate(&env);
     asset_client.mint(&sponsor, &10_000i128);
 

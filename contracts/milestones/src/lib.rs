@@ -739,6 +739,24 @@ impl MilestonesContract {
             .ok_or(Error::ContributionNotFound)
     }
 
+    /// Returns every contribution recorded for `milestone_id` in one call
+    /// (issue #146) — `0..milestone.contributor_count`, in the same order
+    /// `get_contribution` exposes individually. Bounded by `MAX_SPONSORS`
+    /// (20), so this is always a small, cheap read.
+    pub fn get_contributions(env: Env, milestone_id: u64) -> Result<Vec<Contribution>, Error> {
+        let milestone = Self::get_milestone(env.clone(), milestone_id)?;
+        let mut contributions = Vec::new(&env);
+        for i in 0..milestone.contributor_count {
+            let contribution: Contribution = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Contribution(milestone_id, i))
+                .ok_or(Error::MilestoneNotFound)?;
+            contributions.push_back(contribution);
+        }
+        Ok(contributions)
+    }
+
     pub fn get_max_sponsors(env: Env) -> Result<u32, Error> {
         env.storage()
             .instance()
