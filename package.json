@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "deploy": "node scripts/deploy.mjs",
-    "invoke": "node scripts/invoke.mjs"
+    "invoke": "node scripts/invoke.mjs",
+    "test": "node --test scripts/*.test.mjs"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^16.0.1"

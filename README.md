@@ -586,8 +586,8 @@ Or, in an environment where the CLI's own network calls are blocked but
 plain Node.js `fetch` works (as was the case here):
 
 ```sh
-node scripts/deploy.mjs <SECRET_KEY> target/wasm32v1-none/release/mergefi_escrow.wasm escrow
-node scripts/invoke.mjs <SECRET_KEY> <CONTRACT_ID> initialize \
+DEPLOYER_SECRET=<SECRET_KEY> node scripts/deploy.mjs target/wasm32v1-none/release/mergefi_escrow.wasm escrow
+INVOKER_SECRET=<SECRET_KEY> node scripts/invoke.mjs <CONTRACT_ID> initialize \
   address:<ADMIN_G...> address:<TREASURY_G...> u32:250
 ```
 
@@ -597,7 +597,8 @@ via environment variables:
 ```sh
 RPC_URL=https://soroban-mainnet.stellar.org \
 NETWORK_PASSPHRASE=Public Global Stellar Network ; September 2015 \
-  node scripts/deploy.mjs <SECRET_KEY> target/wasm32v1-none/release/mergefi_escrow.wasm escrow
+DEPLOYER_SECRET=<SECRET_KEY> \
+  node scripts/deploy.mjs target/wasm32v1-none/release/mergefi_escrow.wasm escrow
 ```
 
 ## Roadmap

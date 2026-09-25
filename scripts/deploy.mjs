@@ -17,12 +17,13 @@ const RPC_URL = process.env.RPC_URL || "https://soroban-testnet.stellar.org";
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || Networks.TESTNET;
 
 const server = new rpc.Server(RPC_URL);
-const deployerSecret = process.argv[2];
-const wasmPath = process.argv[3];
-const contractName = process.argv[4] ?? "contract";
+const deployerSecret = process.env.DEPLOYER_SECRET || process.argv[2];
+const wasmPath = process.env.DEPLOYER_SECRET ? process.argv[2] : process.argv[3];
+const contractName = (process.env.DEPLOYER_SECRET ? process.argv[3] : process.argv[4]) ?? "contract";
 
 if (!deployerSecret || !wasmPath) {
-  console.error("Usage: node deploy.mjs <secret> <wasm-path> [name]");
+  console.error("Usage: DEPLOYER_SECRET=S... node deploy.mjs <wasm-path> [name]");
+  console.error("   or: node deploy.mjs <secret> <wasm-path> [name] (insecure fallback)");
   process.exit(1);
 }
 
